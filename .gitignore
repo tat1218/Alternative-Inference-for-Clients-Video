@@ -1,0 +1,14 @@
+.env
+CMakeFiles
+*.cmake
+client
+test*
+server
+CMakeCache.txt
+.vscode
+Makefile
+
+my_utils/Pool.o
+my_utils/libmy_utils.a
+my_utils/CMakeFiles
+my_utils/*.cmake

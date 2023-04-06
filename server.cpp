@@ -48,10 +48,10 @@ void action(int sockfd, string modelPath){
             error("ERROR: recv tensor");
             exit(1);
         }
-        //tensor = tensor.permute({2,0,1});
+        tensor = tensor.permute({3,2,0,1});
         //tensor.to(c10::DeviceType::CPU);
         cout << "recv from : " << peerName << endl;
-        cout << "recv tensor : " << tensor << endl;
+        cout << tensor << endl;
         tensor = model.forward({tensor}).toTensor();
         cout << "output : " << tensor.slice(1,0,5) << endl;
         n = sendTensor(sockfd,tensor,buffer);

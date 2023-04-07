@@ -45,7 +45,6 @@ int makeConnection(string hostname, int portNum){
 
 // change cv::Mat to torch::Tensor
 torch::Tensor getTensorFromImage(cv::Mat &frame, int imgSize){
-    cv::resize(frame,frame,{imgSize,imgSize});
     return torch::from_blob(frame.data,{frame.rows,frame.cols,frame.channels()},torch::kByte);
 }
 
@@ -77,6 +76,7 @@ int main(int argc, char** argv){
             error("ERROR: blank frame!");
             break;
         }
+        cv::resize(frame,frame,{imgSize,imgSize});
         if(frame.rows*frame.cols*frame.channels()>BUF_SIZE){
             error("ERROR: frame is out of buffer size");
             break;

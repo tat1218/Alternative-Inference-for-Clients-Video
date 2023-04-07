@@ -14,6 +14,7 @@
 #include "my_utils/distributed.hpp"
 
 #define BUF_SIZE 224*224*3
+#define THREAD_NUM 4
 
 using namespace std;
 
@@ -24,18 +25,18 @@ void error(const char *msg){
 
 void action(int sockfd, string modelPath){
     int n;
-    torch::Tensor tensor;
+    at::Tensor tensor;
+    at::Tensor output;// = torch::ones({1,3,224,224},c10::TensorOptions().dtype(torch::kFloat32));
     sockaddr_in peerAddr;
     socklen_t addrSize = sizeof(sockaddr);
     getpeername(sockfd,(sockaddr*)&peerAddr,&addrSize);
     char *peerName = inet_ntoa(peerAddr.sin_addr);
     unsigned char buffer[BUF_SIZE]; 
-    torch::jit::script::Module model;
-
+    torch::jit::script::Module module;
     try{
-        model = torch::jit::load(modelPath);
-        //model.to(c10::DeviceType::CPU);
-        model.eval();
+        module = torch::jit::load(modelPath);
+        //module.to(at::kCUDA);
+        module.eval();
     }
     catch(const c10::Error& e){
         error("ERROR load model");
@@ -43,22 +44,29 @@ void action(int sockfd, string modelPath){
     }
 
     while(true){
+        bzero(buffer,BUF_SIZE);
         n = recvTensor(sockfd,tensor,buffer);
         if(n<0){
             error("ERROR: recv tensor");
             exit(1);
         }
-        tensor = tensor.permute({3,2,0,1});
-        //tensor.to(c10::DeviceType::CPU);
+        tensor = tensor.permute({2,0,1}).to(at::kFloat);
+        tensor = tensor.reshape({1,tensor.sizes()[0],tensor.sizes()[1],tensor.sizes()[2]});
         cout << "recv from : " << peerName << endl;
-        cout << tensor << endl;
-        tensor = model.forward({tensor}).toTensor();
-        cout << "output : " << tensor.slice(1,0,5) << endl;
-        n = sendTensor(sockfd,tensor,buffer);
+        //cout << "tensor : " << tensor << endl;
+        output = module.forward({tensor}).toTensor();
+        
+        cout << "output : " ;//<< output << endl;
+        //bzero(buffer,BUF_SIZE);
+        
+        n = sendTensor(sockfd,output,buffer);
+        cout << "send to : " << peerName << endl;
         if(n<0){
             error("ERROR: send tensor");
             exit(1);
         }
+        tensor.reset();
+        output.reset();
     }
     std::cout << "recv end" << endl;
     close(sockfd);
@@ -66,9 +74,9 @@ void action(int sockfd, string modelPath){
 }
 
 int main(int argc, char** argv){
-    int sockfd, newsockfd, portno=atoi(argv[1]);
+    int sockfd, portno=atoi(argv[1]);
     string modelName = argv[2];
-    Pool pool(4);
+    Pool pool(THREAD_NUM);
 
     pid_t pid;
     socklen_t clilen;
@@ -87,11 +95,11 @@ int main(int argc, char** argv){
     serv_addr.sin_port = htons(portno);
     if(bind(sockfd, (struct sockaddr *) &serv_addr,sizeof(serv_addr))<0)
         error("ERROR on binding");
-    listen(sockfd,5);
+    listen(sockfd,THREAD_NUM);
     clilen = sizeof(cli_addr);
     
     while(1){
-        newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
+        int newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
         if(newsockfd < 0)
             error("ERROR on accept");
         pool.AddJob(action,newsockfd,modelName);

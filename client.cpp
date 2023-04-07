@@ -50,7 +50,7 @@ torch::Tensor getTensorFromImage(cv::Mat &frame, int imgSize){
     bool detected;
 
     cv::resize(frame,frame,{854,480},0,0,1);
-    cv::resize(frame,frame,{imgSize,imgSize},0,0,1);
+    cv::resize(frame,frame,{imgSize,imgSize});
     return torch::from_blob(frame.data,{frame.rows,frame.cols,frame.channels()},torch::kByte);
 }
 
@@ -67,7 +67,8 @@ int main(int argc, char** argv){
         error("ERROR opening video file");
     
     cv::Mat frame;
-    torch::Tensor tensor;
+    at::Tensor tensor;
+    at::Tensor output;
     unsigned char buffer[BUF_SIZE];
 
     while(true){
@@ -77,13 +78,14 @@ int main(int argc, char** argv){
             break;
         }
         tensor = getTensorFromImage(frame, imgSize);
+        bzero(buffer,BUF_SIZE);
         n = sendTensor(sockfd,tensor,buffer);
         if(n<0)
             error("ERROR send tensor");
         cout << "send to : " << peerName << endl;
-        n = recvTensor(sockfd,tensor,buffer);
+        n = recvTensor(sockfd,output,buffer);
         if(n<0)
-            error("ERROR recv tensor");
+           error("ERROR recv tensor");
         cout << "recv from : " << peerName << endl;
         sleep((rand()%100)/10);
     }

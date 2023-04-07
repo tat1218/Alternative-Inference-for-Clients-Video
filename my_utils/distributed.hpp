@@ -9,9 +9,9 @@
 #include <unistd.h>
 #include <torch/torch.h>
 
-ssize_t sendTensor(int sockfd, torch::Tensor tensor, unsigned char *buffer){
+ssize_t sendTensor(int &sockfd, torch::Tensor &tensor, unsigned char *buffer){
     size_t dim = tensor.sizes().size();
-    int n = write(sockfd, &dim, sizeof(size_t));
+    int n = write(sockfd, &dim, sizeof(size_t)); 
     if(n<0)
         return n;
     int64_t tensorShape[dim], tensorSize=1;
@@ -22,6 +22,7 @@ ssize_t sendTensor(int sockfd, torch::Tensor tensor, unsigned char *buffer){
     n = write(sockfd, tensorShape, sizeof(int64_t)*dim);
     if(n<0)
         return n;
+    cout << 2;
     
     buffer = tensor.data_ptr<unsigned char>();
     n = write(sockfd,buffer,tensorSize);
@@ -29,24 +30,28 @@ ssize_t sendTensor(int sockfd, torch::Tensor tensor, unsigned char *buffer){
     return n;
 }
 
-ssize_t recvTensor(int sockfd,torch::Tensor &tensor, unsigned char *buffer){
+ssize_t recvTensor(int &sockfd,torch::Tensor &tensor, unsigned char *buffer){
     size_t dim;
     int n = read(sockfd,&dim,sizeof(size_t));
     if(n<0)
         return n;
-    int64_t tensorShape[dim+1], tensorSize=1;
+    int64_t tensorShape[dim], tensorSize=1;
     n = read(sockfd,tensorShape, sizeof(int64_t)*dim);
+    cout << 1;
+
     if(n<0)
         return n;
 
     for(int i=0; i<dim; i++)
         tensorSize *= tensorShape[i];
-    tensorShape[dim] = 1;
+
+        
     n = read(sockfd,buffer,tensorSize);
     if(n<0)
         return n;
+    cout << 1;
     
-    auto shape = c10::ArrayRef<int64_t>(tensorShape,dim+1);
+    auto shape = c10::ArrayRef<int64_t>(tensorShape,dim);
     auto options = torch::TensorOptions().dtype(torch::kByte);
     tensor = torch::from_blob(buffer,shape,options);
     std::cout << "recv tensor : " << tensorSize << std::endl;

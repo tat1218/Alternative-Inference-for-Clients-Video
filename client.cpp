@@ -20,6 +20,7 @@ void error(const char *msg){
     exit(1);
 }
 
+// connect server
 int makeConnection(string hostname, int portNum){
     int sockfd, n;
     sockaddr_in serv_addr;
@@ -42,53 +43,70 @@ int makeConnection(string hostname, int portNum){
     return sockfd;
 }
 
+// change cv::Mat to torch::Tensor
 torch::Tensor getTensorFromImage(cv::Mat &frame, int imgSize){
-    cv::Mat boxedFrame, foreground_mask, kernel=cv::Mat({3,3});
-    vector<vector<cv::Point>> contours;
-    cv::Rect rect;
-    auto backgroundObject = cv::createBackgroundSubtractorMOG2(1000,128,false);
-    bool detected;
-
-    cv::resize(frame,frame,{854,480},0,0,1);
     cv::resize(frame,frame,{imgSize,imgSize});
     return torch::from_blob(frame.data,{frame.rows,frame.cols,frame.channels()},torch::kByte);
 }
 
 int main(int argc, char** argv){
+    // for socket
     string hostname = argv[1], dataPath = argv[3];
     int portNum = atoi(argv[2]), imgSize = atoi(argv[4]), sockfd = makeConnection(hostname,portNum), n;
     sockaddr_in peerAddr;
     socklen_t addrSize = sizeof(sockaddr);
     getpeername(sockfd,(sockaddr*)&peerAddr,&addrSize);
     char *peerName = inet_ntoa(peerAddr.sin_addr);
+    float buffer[BUF_SIZE];
 
+    // set video
     auto vid = cv::VideoCapture(dataPath);
     if(!vid.isOpened())
         error("ERROR opening video file");
     
+    // for input and output
     cv::Mat frame;
     at::Tensor tensor;
-    at::Tensor output;
-    unsigned char buffer[BUF_SIZE];
+    float classProb;
+    long classNum;
 
     while(true){
+        // read each frame
         vid.read(frame);
         if(frame.empty()){
             error("ERROR: blank frame!");
             break;
         }
+        if(frame.rows*frame.cols*frame.channels()>BUF_SIZE){
+            error("ERROR: frame is out of buffer size");
+            break;
+        }
+
+        // get tensor from image and preprocess it
         tensor = getTensorFromImage(frame, imgSize);
-        bzero(buffer,BUF_SIZE);
+        tensor = tensor.permute({2,0,1}).toType(at::kFloat);
+
+        // send tensor to server
         n = sendTensor(sockfd,tensor,buffer);
         if(n<0)
             error("ERROR send tensor");
         cout << "send to : " << peerName << endl;
-        n = recvTensor(sockfd,output,buffer);
+
+        // receive DNN inference result from server
+        n = read(sockfd,&classProb,sizeof(float));
+        if(n<0)
+           error("ERROR recv tensor");
+        n = read(sockfd,&classNum,sizeof(long));
         if(n<0)
            error("ERROR recv tensor");
         cout << "recv from : " << peerName << endl;
-        sleep((rand()%100)/10);
+        cout << "result : prob - " << classProb << " class number - " << classNum << endl;
+        sleep(1);
     }
+
+    // signal server for terminate
+    int end = 0;
+    n = write(sockfd,&end,sizeof(int));
     close(sockfd);
     return 0;
 }

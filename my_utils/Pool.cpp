@@ -12,6 +12,7 @@ Pool::Pool(int thread_num):_stop_event(false){
 void Pool::Worker(){
     while(true){
         unique_lock<std::mutex> lock(m);
+        // wait until job is added or stop event set
         cv.wait(lock, [this](){return !(this->job.empty())||this->_stop_event;});
         if(_stop_event)
             return;
@@ -20,6 +21,7 @@ void Pool::Worker(){
         job.pop();
         lock.unlock();
 
+        // do job function
         j();
     }
 }
@@ -30,18 +32,3 @@ Pool::~Pool(){
     for(auto& t: pool)
         t.join();
 }
-/*
-int foo(int a, int b){
-    cout << a << b << endl;
-    return a+b;
-}
-
-int main(){
-    Pool p(3);
-    int a,b;
-    a=10, b=11;
-    auto f = p.AddJob(foo,a,b);
-    cout << f.get() << endl;
-    return 0;
-}
-*/

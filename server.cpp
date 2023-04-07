@@ -23,19 +23,26 @@ void error(const char *msg){
     exit(1);
 }
 
+// DNN service for client
 void action(int sockfd, string modelPath){
     int n;
-    at::Tensor tensor;
-    at::Tensor output;// = torch::ones({1,3,224,224},c10::TensorOptions().dtype(torch::kFloat32));
+    // for input, output
+    long classNum;
+    float classProb;
+    torch::Tensor tensor, output;
+
+    // for socket
     sockaddr_in peerAddr;
     socklen_t addrSize = sizeof(sockaddr);
     getpeername(sockfd,(sockaddr*)&peerAddr,&addrSize);
     char *peerName = inet_ntoa(peerAddr.sin_addr);
-    unsigned char buffer[BUF_SIZE]; 
+    float buffer[BUF_SIZE];
+
+    // load DNN model from modelPath
     torch::jit::script::Module module;
     try{
         module = torch::jit::load(modelPath);
-        //module.to(at::kCUDA);
+        module.to(c10::DeviceType::CPU);
         module.eval();
     }
     catch(const c10::Error& e){
@@ -44,41 +51,53 @@ void action(int sockfd, string modelPath){
     }
 
     while(true){
+        // reset
+        tensor.reset();
+        output.reset();
         bzero(buffer,BUF_SIZE);
+
+        // receive tensor from client
         n = recvTensor(sockfd,tensor,buffer);
         if(n<0){
-            error("ERROR: recv tensor");
-            exit(1);
+            cout << "recv end" << endl;
+            break;
         }
-        tensor = tensor.permute({2,0,1}).to(at::kFloat);
+
+        // preprocess tensor and apply DNN model
         tensor = tensor.reshape({1,tensor.sizes()[0],tensor.sizes()[1],tensor.sizes()[2]});
         cout << "recv from : " << peerName << endl;
-        //cout << "tensor : " << tensor << endl;
-        output = module.forward({tensor}).toTensor();
-        
-        cout << "output : " ;//<< output << endl;
-        //bzero(buffer,BUF_SIZE);
-        
-        n = sendTensor(sockfd,output,buffer);
-        cout << "send to : " << peerName << endl;
+        output = torch::softmax(module.forward({tensor}).toTensor(),1);
+
+
+        // processing result
+        tuple<torch::Tensor, torch::Tensor> result = torch::max(output,1);
+        classProb = get<0>(result).accessor<float,1>()[0];
+        classNum = get<1>(result).accessor<long,1>()[0];
+
+        // send result to client
+        n = write(sockfd,&classProb,sizeof(float));
         if(n<0){
             error("ERROR: send tensor");
             exit(1);
         }
-        tensor.reset();
-        output.reset();
+        n = write(sockfd,&classNum,sizeof(float));
+        if(n<0){
+            error("ERROR: send tensor");
+            exit(1);
+        }
+        cout << "send to : " << peerName << endl;
     }
-    std::cout << "recv end" << endl;
     close(sockfd);
     return;
 }
 
 int main(int argc, char** argv){
-    int sockfd, portno=atoi(argv[1]);
+    // for DNN model
     string modelName = argv[2];
+    // for multithreading
     Pool pool(THREAD_NUM);
-
-    pid_t pid;
+    // for socket
+    int sockfd, portno=atoi(argv[1]);
     socklen_t clilen;
     struct sockaddr_in serv_addr, cli_addr;
     int n;
@@ -86,6 +105,7 @@ int main(int argc, char** argv){
         fprintf(stderr,"ERROR, no port\n");
         exit(1);
     }
+    // setting socket
     sockfd = socket(AF_INET,SOCK_STREAM,0);
     if(sockfd<0)
         error("EROR opening socket");
@@ -99,6 +119,7 @@ int main(int argc, char** argv){
     clilen = sizeof(cli_addr);
     
     while(1){
+        // for each client, make new socket and thread
         int newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
         if(newsockfd < 0)
             error("ERROR on accept");

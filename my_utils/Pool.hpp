@@ -17,6 +17,8 @@ class Pool{
 public:
     Pool(int thread_num);
     ~Pool();
+
+    // c++17 is required for invoke_result(<type_traits>)
     template<class Func, class... Args>
     future<std::invoke_result_t<Func,Args...>> AddJob(Func&& f,Args&&... args){
         cout << "Job is Added" << endl;
@@ -24,7 +26,9 @@ public:
             throw runtime_error("Thread Pool is stopped!");
 
         using return_type = typename invoke_result<Func,Args...>::type;
+        // make function with shared pointer
         auto j = make_shared<packaged_task<return_type()>>(bind(f,forward<Args>(args)...));
+        // return value of job is required -> use future 
         future<return_type> job_result = j->get_future();
         {
             lock_guard<mutex> lock(m);

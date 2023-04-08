@@ -11,7 +11,7 @@
 #include <torch/script.h>
 #include <thread>
 #include "my_utils/Pool.hpp"
-#include "my_utils/distributed.hpp"
+#include "my_utils/Transfer.hpp"
 
 #define BUF_SIZE 224*224*3
 #define THREAD_NUM 4
@@ -59,15 +59,15 @@ void action(int sockfd, string modelPath){
         // receive tensor from client
         n = recvTensor(sockfd,tensor,buffer);
         if(n<0){
-            cout << "recv end" << endl;
+            cout << "recv end" << '\n';
+            cout << "close connection to " << peerName << '\n';
             break;
         }
+        cout << "recv from : " << peerName << '\n';
 
         // preprocess tensor and apply DNN model
-        tensor = tensor.reshape({1,tensor.sizes()[0],tensor.sizes()[1],tensor.sizes()[2]});
-        cout << "recv from : " << peerName << endl;
+        tensor.unsqueeze_(0);
         output = torch::softmax(module.forward({tensor}).toTensor(),1);
-
 
         // processing result
         tuple<torch::Tensor, torch::Tensor> result = torch::max(output,1);
@@ -85,7 +85,7 @@ void action(int sockfd, string modelPath){
             error("ERROR: send tensor");
             exit(1);
         }
-        cout << "send to : " << peerName << endl;
+        cout << "send to : " << peerName << " / class : " << classNum << '\n';
     }
     close(sockfd);
     return;

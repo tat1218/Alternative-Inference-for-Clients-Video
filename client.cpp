@@ -11,9 +11,12 @@
 #include <torch/torch.h>
 #include <arpa/inet.h>
 #include "my_utils/Pool.hpp"
-#include "my_utils/distributed.hpp"
+#include "my_utils/Transfer.hpp"
 
 #define BUF_SIZE 224*224*3
+
+const float normMean[3] = {0.45, 0.45,0.45};
+const float normStd[3] = {0.22, 0.22, 0.22};
 
 void error(const char *msg){
     perror(msg);
@@ -73,7 +76,7 @@ int main(int argc, char** argv){
         // read each frame
         vid.read(frame);
         if(frame.empty()){
-            error("ERROR: blank frame!");
+            cout << "Empty frame!!! Video ends" << '\n';
             break;
         }
         cv::resize(frame,frame,{imgSize,imgSize});
@@ -84,13 +87,14 @@ int main(int argc, char** argv){
 
         // get tensor from image and preprocess it
         tensor = getTensorFromImage(frame, imgSize);
-        tensor = tensor.permute({2,0,1}).toType(at::kFloat);
-
+        tensor = tensor.permute({2,0,1}).toType(at::kFloat).div(255);
+        for(int ch=0; ch<3; ch++)
+            tensor[ch].sub_(normMean[ch]).div_(normStd[ch]);
         // send tensor to server
         n = sendTensor(sockfd,tensor,buffer);
         if(n<0)
             error("ERROR send tensor");
-        cout << "send to : " << peerName << endl;
+        cout << "send to : " << peerName << '\n';
 
         // receive DNN inference result from server
         n = read(sockfd,&classProb,sizeof(float));
@@ -99,14 +103,14 @@ int main(int argc, char** argv){
         n = read(sockfd,&classNum,sizeof(long));
         if(n<0)
            error("ERROR recv tensor");
-        cout << "recv from : " << peerName << endl;
-        cout << "result : prob - " << classProb << " class number - " << classNum << endl;
-        sleep(1);
+        cout << "recv from : " << peerName << '\n';
+        cout << "result : prob - " << classProb*100 << "% class number - " << classNum << '\n';
+        //sleep(1);
     }
 
     // signal server for terminate
-    int end = 0;
-    n = write(sockfd,&end,sizeof(int));
+    size_t end = 0;
+    n = write(sockfd,&end,sizeof(size_t));
     close(sockfd);
     return 0;
 }

@@ -21,7 +21,7 @@ public:
     // c++17 is required for invoke_result(<type_traits>)
     template<class Func, class... Args>
     future<std::invoke_result_t<Func,Args...>> AddJob(Func&& f,Args&&... args){
-        cout << "Job is Added" << endl;
+        cout << "Job is Added" << '\n';
         if(_stop_event)
             throw runtime_error("Thread Pool is stopped!");
 

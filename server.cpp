@@ -118,6 +118,7 @@ int main(int argc, char** argv){
     listen(sockfd,THREAD_NUM);
     clilen = sizeof(cli_addr);
     
+    cout << "Server is Ready." << '\n';
     while(1){
         // for each client, make new socket and thread
         int newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);

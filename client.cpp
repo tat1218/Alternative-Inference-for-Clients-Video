@@ -70,7 +70,7 @@ int main(int argc, char** argv){
     cv::Mat frame;
     at::Tensor tensor;
     float classProb;
-    long classNum;
+    long classNum, frameNum=1;
 
     while(true){
         // read each frame
@@ -104,7 +104,7 @@ int main(int argc, char** argv){
         if(n<0)
            error("ERROR recv tensor");
         cout << "recv from : " << peerName << '\n';
-        cout << "result : prob - " << classProb*100 << "% class number - " << classNum << '\n';
+        cout << "frame " << frameNum << "-> result : prob - " << classProb*100 << "% / class number - " << classNum << '\n';
         //sleep(1);
     }
 

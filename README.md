@@ -21,7 +21,9 @@
 ## How to run
 #### 1. Build binary files
 >  cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch
+
 >  cmake CMakeLists.txt
+
 >  make
 
 #### 2. Run server

@@ -1,8 +1,8 @@
 # Alternative Inference for Clients’ Video
 
-* server-client connection model
 * client send video to server, then receive inference result
 * server receive each frame and apply DNN model to frame, then send result to client
+* DNN model -> TorchScript model
 
 ## File Description
 

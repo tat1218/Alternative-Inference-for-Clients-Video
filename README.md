@@ -1,4 +1,4 @@
-# Video Inference Instaed of Client(VIIC)
+# Alternative Inference for Clients’ Video (AICV)
 
 * server-client connection model
 * client send video to server, then receive inference result
